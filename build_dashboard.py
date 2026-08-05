@@ -242,6 +242,9 @@ def enrich_from_wikipedia(bird: Bird) -> tuple[Bird, list[str]]:
             warnings.append(f"Wikipedia summary for {title} did not include an extract.")
             continue
 
+        if not bird.image_url and not bird.image_path:
+            bird.image_url = wikipedia_image_url(record)
+
         bird.description = choose_better_description(bird.description, extract)
         bird.source_url = bird.source_url or wikipedia_page_url(record)
         bird.source_name = bird.source_name or "Wikipedia"
@@ -281,6 +284,19 @@ def wikipedia_page_url(record: dict[str, Any]) -> str | None:
             page = desktop.get("page")
             if isinstance(page, str) and page.strip():
                 return page.strip()
+    return None
+
+
+def wikipedia_image_url(record: dict[str, Any]) -> str | None:
+    # The summary API's thumbnail is already a web-friendly raster and is
+    # normally large enough for the e-ink photo panel. Fall back to the
+    # original image when a page does not provide a thumbnail.
+    for key in ["thumbnail", "originalimage"]:
+        image = record.get(key)
+        if isinstance(image, dict):
+            source = clean_optional(image.get("source"))
+            if source:
+                return source
     return None
 
 
@@ -1009,12 +1025,12 @@ def main() -> None:
     date_text = selected_date(args.timezone, args.date)
     bird = choose_bird(birds, date_text, args.seed)
     enrichment_warnings: list[str] = []
-    if not args.no_birdnet:
-        bird, birdnet_warnings = enrich_from_birdnet(bird, args.birdnet_size)
-        enrichment_warnings.extend(birdnet_warnings)
     if not args.no_wikipedia:
         bird, wikipedia_warnings = enrich_from_wikipedia(bird)
         enrichment_warnings.extend(wikipedia_warnings)
+    if not args.no_birdnet:
+        bird, birdnet_warnings = enrich_from_birdnet(bird, args.birdnet_size)
+        enrichment_warnings.extend(birdnet_warnings)
     image, metadata = render_dashboard(bird, date_text, args.width, args.height, args.saturation)
     metadata["warnings"] = enrichment_warnings + metadata.get("warnings", [])
     if args.require_image and not metadata["image"]["loaded"]:
