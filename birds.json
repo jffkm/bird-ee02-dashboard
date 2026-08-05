@@ -1,0 +1,42 @@
+[
+  {
+    "common_name": "Northern Cardinal",
+    "scientific_name": "Cardinalis cardinalis"
+  },
+  {
+    "common_name": "American Robin",
+    "scientific_name": "Turdus migratorius"
+  },
+  {
+    "common_name": "Great Blue Heron",
+    "scientific_name": "Ardea herodias"
+  },
+  {
+    "common_name": "American Goldfinch",
+    "scientific_name": "Spinus tristis"
+  },
+  {
+    "common_name": "Wild Turkey",
+    "scientific_name": "Meleagris gallopavo"
+  },
+  {
+    "common_name": "Northern Raven",
+    "scientific_name": "Corvus corax"
+  },
+  {
+    "common_name": "Mallard",
+    "scientific_name": "Anas platyrhynchos"
+  },
+  {
+    "common_name": "Canada Goose",
+    "scientific_name": "Branta canadensis"
+  },
+  {
+    "common_name": "Red-shouldered Hawk",
+    "scientific_name": "Buteo lineatus"
+  },
+  {
+    "common_name": "Great Egret",
+    "scientific_name": "Ardea alba"
+  }
+]

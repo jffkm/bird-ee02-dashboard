@@ -1,0 +1,37 @@
+{
+  "date": "2026-08-04",
+  "generated_at": "2026-08-05T06:03:42.674843+00:00",
+  "screen": {
+    "width": 800,
+    "height": 480
+  },
+  "bird": {
+    "common_name": "Northern Cardinal",
+    "scientific_name": "Cardinalis cardinalis",
+    "facts": [
+      "Males are bright red, while females are warm brown with red accents.",
+      "Pairs often stay in the same area throughout the year.",
+      "Both parents feed the young after hatching."
+    ],
+    "status": null,
+    "habitat": null,
+    "range": null,
+    "description": null,
+    "image_url": null,
+    "image_credit": "Test placeholder",
+    "image_license": "Sample data",
+    "source_url": null,
+    "source_name": null
+  },
+  "image": {
+    "loaded": false,
+    "url": null,
+    "path": null,
+    "content_type": null,
+    "content_length": null,
+    "format": null
+  },
+  "warnings": [
+    "No image_url or image_path was provided."
+  ]
+}

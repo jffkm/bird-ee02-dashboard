@@ -1,0 +1,17 @@
+[Unit]
+Description=Fetch and display the daily bird dashboard on Pimoroni Inky
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/bird-inky.env
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/bird-inky.env
+WorkingDirectory=/opt/bird-inky
+ExecStart=/opt/bird-inky/venv/bin/python /opt/bird-inky/display_bird.py
+TimeoutStartSec=300
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

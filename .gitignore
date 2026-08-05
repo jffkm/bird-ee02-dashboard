@@ -1,0 +1,9 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+public/
+
+# Local configuration copied from the committed example.
+raspberry_pi/bird-dashboard.env
+

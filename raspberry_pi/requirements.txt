@@ -1,0 +1,5 @@
+# Pins match Pimoroni's tested wheels; bound Inky to the current major release.
+numpy==2.2.1
+Pillow==11.0.0
+inky>=2.0,<3.0
+
