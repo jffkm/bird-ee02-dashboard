@@ -546,6 +546,106 @@ def wrap_pixels(draw: ImageDraw.ImageDraw, text: str, fnt: ImageFont.ImageFont, 
     return lines or [""]
 
 
+def summarize_fact_for_panel(
+    draw: ImageDraw.ImageDraw,
+    fact: str,
+    fnt: ImageFont.ImageFont,
+    max_width: int,
+    max_lines: int = 3,
+) -> str:
+    """Return the longest complete, concise version that fits the bullet area."""
+    candidates = fact_summary_candidates(fact)
+    for candidate in candidates:
+        if len(wrap_pixels(draw, candidate, fnt, max_width)) <= max_lines:
+            return candidate
+    return candidates[-1]
+
+
+def fact_summary_candidates(fact: str) -> list[str]:
+    """Build extractive summaries without chopping a sentence mid-word or mid-clause."""
+    clean = re.sub(r"\s+", " ", fact).strip()
+    if not clean:
+        return [""]
+
+    candidates = [clean]
+    first_sentence = sentences_from_text(clean, limit=1)
+    if first_sentence and first_sentence[0] != clean:
+        candidates.append(first_sentence[0])
+
+    simplified = re.sub(r"\s*\([^)]*\)", "", candidates[-1])
+    simplified = re.sub(
+        r",\s*(?:(?:also|sometimes)\s+)?(?:known|called|referred to)\b.*?,\s*(?=(?:is|are|was|were)\b)",
+        " ",
+        simplified,
+        flags=re.IGNORECASE,
+    )
+    simplified = re.sub(r"\s+", " ", simplified).strip()
+    candidates.append(simplified)
+
+    # These boundaries usually introduce supporting detail. Keeping the text
+    # before them produces a short, grammatical fact rather than an ellipsis.
+    boundary_pattern = re.compile(
+        r";|\s+[—–]\s+|,\s+(?=(?:which|where|while|although|though|because|"
+        r"including|especially|with|more than|making|giving|allowing|through)\b)",
+        flags=re.IGNORECASE,
+    )
+    for base in list(candidates):
+        matches = list(boundary_pattern.finditer(base))
+        for match in reversed(matches):
+            prefix = complete_fact_sentence(base[: match.start()])
+            if looks_like_complete_fact(prefix):
+                candidates.append(prefix)
+
+    unique: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        candidate = complete_fact_sentence(candidate)
+        key = candidate.casefold()
+        if candidate and key not in seen:
+            unique.append(candidate)
+            seen.add(key)
+
+    # The renderer tries longest summaries first, preserving as much useful
+    # detail as the allocated space permits.
+    return sorted(unique, key=len, reverse=True)
+
+
+def complete_fact_sentence(text: str) -> str:
+    text = text.strip().rstrip(" ,;:—–-")
+    if text and text[-1] not in ".!?":
+        text += "."
+    return text
+
+
+def looks_like_complete_fact(text: str) -> bool:
+    words = re.findall(r"[A-Za-z']+", text.casefold())
+    if len(words) < 4:
+        return False
+    verbs = {
+        "am",
+        "are",
+        "can",
+        "contains",
+        "feeds",
+        "flies",
+        "has",
+        "have",
+        "hunts",
+        "includes",
+        "is",
+        "lives",
+        "migrates",
+        "nests",
+        "occurs",
+        "prefers",
+        "ranges",
+        "uses",
+        "was",
+        "were",
+    }
+    return any(word in verbs or word.endswith(("ed", "ing")) for word in words)
+
+
 def split_long_word(draw: ImageDraw.ImageDraw, word: str, fnt: ImageFont.ImageFont, max_width: int) -> list[str]:
     parts: list[str] = []
     current = ""
@@ -761,62 +861,12 @@ def draw_text_panel(
     panel_w = x2 - x1
     panel_h = y2 - y1
 
-    title_size = max(25, min(44, round(min(width, height) * 0.09)))
-    fact_size = max(15, min(24, round(min(width, height) * 0.045)))
+    preferred_title_size = max(25, min(44, round(min(width, height) * 0.09)))
+    preferred_fact_size = max(15, min(24, round(min(width, height) * 0.045)))
     meta_size = max(11, min(16, round(min(width, height) * 0.03)))
 
-    title_font = font(title_size, bold=True)
-    sci_font = font(max(13, round(title_size * 0.45)), italic=True)
-    fact_font = font(fact_size)
-    fact_bold = font(fact_size, bold=True)
     meta_font = font(meta_size)
     small_bold = font(meta_size, bold=True)
-
-    # Reduce text size until the core content fits.
-    for _ in range(8):
-        title_lines = wrap_pixels(draw, bird.common_name, title_font, panel_w)
-        sci_lines = wrap_pixels(draw, bird.scientific_name, sci_font, panel_w)
-        fact_lines = wrapped_facts(draw, bird.facts[:4], fact_font, panel_w)
-        needed = estimate_text_height(draw, title_lines, title_font, 1.05)
-        needed += estimate_text_height(draw, sci_lines, sci_font, 1.2) + max(10, height // 45)
-        needed += estimate_text_height(draw, fact_lines, fact_font, 1.25)
-        needed += max(38, height // 12)
-        if needed <= panel_h or fact_size <= 12:
-            break
-        title_size -= 2
-        fact_size -= 1
-        title_font = font(title_size, bold=True)
-        sci_font = font(max(12, round(title_size * 0.45)), italic=True)
-        fact_font = font(fact_size)
-        fact_bold = font(fact_size, bold=True)
-
-    y = y1
-
-    eyebrow = "BIRD OF THE DAY"
-    draw.text((x1, y), eyebrow, fill=RED, font=small_bold)
-    y += text_size(draw, eyebrow, small_bold)[1] + max(8, height // 70)
-
-    for line in wrap_pixels(draw, bird.common_name, title_font, panel_w):
-        draw.text((x1, y), line, fill=BLACK, font=title_font)
-        y += round(text_size(draw, "Ag", title_font)[1] * 1.08)
-
-    y += max(2, height // 160)
-    for line in wrap_pixels(draw, bird.scientific_name, sci_font, panel_w):
-        draw.text((x1, y), line, fill=BLUE, font=sci_font)
-        y += round(text_size(draw, "Ag", sci_font)[1] * 1.25)
-
-    y += max(12, height // 35)
-
-    for fact in bird.facts[:4]:
-        if y > y2 - max(70, height // 8):
-            break
-        bullet_w = max(10, width // 55)
-        draw.ellipse((x1, y + 5, x1 + 7, y + 12), fill=GREEN)
-        lines = wrap_pixels(draw, fact, fact_font, panel_w - bullet_w)
-        for line in lines[:3]:
-            draw.text((x1 + bullet_w, y), line, fill=BLACK, font=fact_font)
-            y += round(text_size(draw, "Ag", fact_font)[1] * 1.25)
-        y += max(5, height // 100)
 
     meta_parts = []
     if bird.status:
@@ -835,37 +885,152 @@ def draw_text_panel(
         footer_lines.extend(wrap_pixels(draw, "  ".join(meta_parts), meta_font, panel_w))
     if attribution:
         footer_lines.extend(wrap_pixels(draw, f"Image: {attribution}", meta_font, panel_w))
+    footer_lines = footer_lines[-3:]
 
-    footer_y = y2 - estimate_text_height(draw, footer_lines[-3:], meta_font, 1.15)
-    footer_y = max(y + 4, footer_y)
+    eyebrow = "BIRD OF THE DAY"
+    eyebrow_step = text_line_step(draw, small_bold, 1.0)
+    eyebrow_gap = max(8, height // 70)
+    title_sci_gap = max(2, height // 160)
+    facts_top_gap = max(12, height // 35)
+    fact_gap = max(5, height // 100)
+    bullet_w = max(10, width // 55)
+    footer_step = text_line_step(draw, meta_font, 1.15)
+    footer_height = len(footer_lines) * footer_step
+    footer_separator_space = 12 if footer_lines else 0
+
+    # Fit complete facts into the panel. Prefer up to four facts at a readable
+    # size; if they do not all fit, show fewer complete facts instead of
+    # clipping a sentence after an arbitrary number of wrapped lines.
+    source_facts = bird.facts[:4]
+    title_min = max(24, preferred_title_size - 16)
+    fact_min = max(13, preferred_fact_size - 6)
+    layout = None
+
+    for fact_count in range(len(source_facts), 0, -1):
+        best_for_count = None
+        for summary_level, max_fact_lines in enumerate((None, 3, 2)):
+            for fact_size in range(preferred_fact_size, fact_min - 1, -1):
+                candidate_fact_font = font(fact_size)
+                candidate_fact_step = text_line_step(draw, candidate_fact_font, 1.25)
+                candidate_facts = source_facts[:fact_count]
+                if max_fact_lines is not None:
+                    candidate_facts = [
+                        summarize_fact_for_panel(
+                            draw,
+                            fact,
+                            candidate_fact_font,
+                            panel_w - bullet_w,
+                            max_lines=max_fact_lines,
+                        )
+                        for fact in candidate_facts
+                    ]
+                candidate_fact_blocks = [
+                    wrap_pixels(draw, fact, candidate_fact_font, panel_w - bullet_w)
+                    for fact in candidate_facts
+                ]
+                facts_height = sum(len(lines) * candidate_fact_step for lines in candidate_fact_blocks)
+                facts_height += max(0, fact_count - 1) * fact_gap
+
+                for title_size in range(preferred_title_size, title_min - 1, -2):
+                    candidate_title_font = font(title_size, bold=True)
+                    candidate_sci_font = font(max(12, round(title_size * 0.45)), italic=True)
+                    candidate_title_lines = wrap_pixels(draw, bird.common_name, candidate_title_font, panel_w)
+                    candidate_sci_lines = wrap_pixels(draw, bird.scientific_name, candidate_sci_font, panel_w)
+                    candidate_title_step = text_line_step(draw, candidate_title_font, 1.08)
+                    candidate_sci_step = text_line_step(draw, candidate_sci_font, 1.25)
+
+                    needed = eyebrow_step + eyebrow_gap
+                    needed += len(candidate_title_lines) * candidate_title_step
+                    needed += title_sci_gap + len(candidate_sci_lines) * candidate_sci_step
+                    needed += facts_top_gap + facts_height
+                    needed += footer_separator_space + footer_height
+
+                    if needed <= panel_h:
+                        candidate = {
+                            "title_size": title_size,
+                            "fact_size": fact_size,
+                            "title_font": candidate_title_font,
+                            "sci_font": candidate_sci_font,
+                            "fact_font": candidate_fact_font,
+                            "title_lines": candidate_title_lines,
+                            "sci_lines": candidate_sci_lines,
+                            "fact_blocks": candidate_fact_blocks,
+                            "title_step": candidate_title_step,
+                            "sci_step": candidate_sci_step,
+                            "fact_step": candidate_fact_step,
+                        }
+                        # Prefer readable type and title, then less
+                        # summarization. The outer loop still makes retaining
+                        # higher-priority bullets the first consideration.
+                        key = (fact_size, title_size, -summary_level)
+                        if best_for_count is None or key > best_for_count[0]:
+                            best_for_count = (key, candidate)
+
+        if best_for_count is not None:
+            layout = best_for_count[1]
+            break
+
+    # Bird facts are normally short sentences, so the regular fitting pass
+    # should always find a layout. This fallback still guarantees no overflow
+    # for unexpectedly long source text by omitting facts rather than drawing
+    # a partial sentence.
+    if layout is None:
+        fallback_title_font = font(title_min, bold=True)
+        fallback_sci_font = font(max(12, round(title_min * 0.45)), italic=True)
+        layout = {
+            "title_size": title_min,
+            "fact_size": fact_min,
+            "title_font": fallback_title_font,
+            "sci_font": fallback_sci_font,
+            "fact_font": font(fact_min),
+            "title_lines": wrap_pixels(draw, bird.common_name, fallback_title_font, panel_w),
+            "sci_lines": wrap_pixels(draw, bird.scientific_name, fallback_sci_font, panel_w),
+            "fact_blocks": [],
+            "title_step": text_line_step(draw, fallback_title_font, 1.08),
+            "sci_step": text_line_step(draw, fallback_sci_font, 1.25),
+            "fact_step": text_line_step(draw, font(fact_min), 1.25),
+        }
+
+    title_font = layout["title_font"]
+    sci_font = layout["sci_font"]
+    fact_font = layout["fact_font"]
+
+    y = y1
+
+    draw.text((x1, y), eyebrow, fill=RED, font=small_bold)
+    y += eyebrow_step + eyebrow_gap
+
+    for line in layout["title_lines"]:
+        draw.text((x1, y), line, fill=BLACK, font=title_font)
+        y += layout["title_step"]
+
+    y += title_sci_gap
+    for line in layout["sci_lines"]:
+        draw.text((x1, y), line, fill=BLUE, font=sci_font)
+        y += layout["sci_step"]
+
+    y += facts_top_gap
+
+    for fact_index, lines in enumerate(layout["fact_blocks"]):
+        draw.ellipse((x1, y + 5, x1 + 7, y + 12), fill=GREEN)
+        for line in lines:
+            draw.text((x1 + bullet_w, y), line, fill=BLACK, font=fact_font)
+            y += layout["fact_step"]
+        if fact_index < len(layout["fact_blocks"]) - 1:
+            y += fact_gap
+
+    if not footer_lines:
+        return
+
+    footer_y = y2 - footer_height
     draw.line((x1, footer_y - 8, x2, footer_y - 8), fill=LIGHT_GRAY, width=1)
-    for line in footer_lines[-3:]:
+    for line in footer_lines:
         draw.text((x1, footer_y), ellipsize(draw, line, meta_font, panel_w), fill=MID_GRAY, font=meta_font)
-        footer_y += round(text_size(draw, "Ag", meta_font)[1] * 1.15)
+        footer_y += footer_step
 
 
-def wrapped_facts(
-    draw: ImageDraw.ImageDraw,
-    facts: list[str],
-    fnt: ImageFont.ImageFont,
-    max_width: int,
-) -> list[str]:
-    lines: list[str] = []
-    for fact in facts:
-        lines.extend(wrap_pixels(draw, fact, fnt, max_width))
-    return lines
-
-
-def estimate_text_height(
-    draw: ImageDraw.ImageDraw,
-    lines: list[str],
-    fnt: ImageFont.ImageFont,
-    multiplier: float,
-) -> int:
-    if not lines:
-        return 0
-    _, line_h = text_size(draw, "Ag", fnt)
-    return round(len(lines) * line_h * multiplier)
+def text_line_step(draw: ImageDraw.ImageDraw, fnt: ImageFont.ImageFont, multiplier: float) -> int:
+    return max(1, round(text_size(draw, "Ag", fnt)[1] * multiplier))
 
 
 def write_outputs(out_dir: Path, image: Image.Image, metadata: dict[str, Any]) -> None:
