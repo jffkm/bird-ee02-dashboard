@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,9 @@ IMAGE_URL = os.environ.get("BIRD_IMAGE_URL", "").strip()
 META_URL = os.environ.get("BIRD_META_URL", "").strip()
 CACHE_DIR = Path(os.environ.get("BIRD_CACHE_DIR", "/var/lib/bird-inky"))
 POWER_OFF = os.environ.get("BIRD_POWER_OFF", "1").strip() != "0"
+STAY_AWAKE_ON_USB = os.environ.get("BIRD_STAY_AWAKE_ON_USB", "1").strip() != "0"
+PISUGAR_SOCKET = Path(os.environ.get("BIRD_PISUGAR_SOCKET", "/tmp/pisugar-server.sock"))
+PISUGAR_QUERY_ATTEMPTS = max(1, int(os.environ.get("BIRD_PISUGAR_QUERY_ATTEMPTS", "5")))
 DOWNLOAD_TIMEOUT = int(os.environ.get("BIRD_DOWNLOAD_TIMEOUT", "30"))
 DOWNLOAD_ATTEMPTS = max(1, int(os.environ.get("BIRD_DOWNLOAD_ATTEMPTS", "4")))
 RETRY_DELAY = max(0, int(os.environ.get("BIRD_RETRY_DELAY", "10")))
@@ -124,10 +128,49 @@ def display_image(path: Path) -> None:
     log("Display updated")
 
 
+def pisugar_external_power() -> bool | None:
+    """Return whether PiSugar USB input is powered, or None if unavailable."""
+    for attempt in range(1, PISUGAR_QUERY_ATTEMPTS + 1):
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.settimeout(2)
+                client.connect(str(PISUGAR_SOCKET))
+                client.sendall(b"get battery_power_plugged\n")
+                response = client.recv(4096).decode("utf-8", errors="replace").strip()
+
+            value = response.rsplit(":", 1)[-1].strip().casefold()
+            if value == "true":
+                log("PiSugar reports external USB power")
+                return True
+            if value == "false":
+                log("PiSugar reports battery-only power")
+                return False
+            raise ValueError(f"unexpected response: {response!r}")
+        except (OSError, ValueError) as exc:
+            log(
+                "PiSugar power-source query "
+                f"{attempt}/{PISUGAR_QUERY_ATTEMPTS} failed: {exc}"
+            )
+            if attempt < PISUGAR_QUERY_ATTEMPTS:
+                time.sleep(1)
+
+    return None
+
+
 def poweroff() -> None:
     if not POWER_OFF:
         log("BIRD_POWER_OFF=0; leaving Pi running for testing")
         return
+
+    if STAY_AWAKE_ON_USB:
+        external_power = pisugar_external_power()
+        if external_power is True:
+            log("External USB power is connected; leaving Pi running for troubleshooting")
+            return
+        if external_power is None:
+            log("Could not confirm the power source; leaving Pi running as a safety precaution")
+            return
+
     log("Powering off")
     subprocess.run(["/usr/bin/systemctl", "poweroff"], check=False)
 
