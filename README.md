@@ -109,7 +109,24 @@ sudo journalctl -u bird-inky -n 100 --no-pager
 
 After the display works, change `BIRD_POWER_OFF=1` in `/etc/bird-inky.env` for
 the low-power appliance workflow. Starting the service or booting the Pi will
-then update the display and shut the Pi down.
+then update the display and shut the Pi down when it is running on battery.
+With the default `BIRD_STAY_AWAKE_ON_USB=1`, the Pi remains online whenever the
+PiSugar reports power at its USB-C input. If the PiSugar service cannot be
+queried, the script also remains online as a safety precaution.
+
+The external-power check uses PiSugar Power Manager's local Unix socket and its
+`battery_power_plugged` status. Connect troubleshooting power to the PiSugar
+USB-C input; power applied directly to the Raspberry Pi may not be visible to
+the PiSugar input sensor.
+
+### Emergency stay-awake override
+
+If automatic shutdown is enabled and you need to recover the Pi, turn it off,
+put the microSD card in another computer, and create an empty file named
+`bird-inky-stay-awake` in the root of the visible boot partition. On Raspberry
+Pi OS Bookworm this appears at `/boot/firmware/bird-inky-stay-awake` while the
+Pi is running. The systemd service will be skipped at boot, leaving the Pi
+available for SSH. Remove the file only after setting `BIRD_POWER_OFF=0`.
 
 ## Updating the Pi
 

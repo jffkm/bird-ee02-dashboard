@@ -1,8 +1,12 @@
 [Unit]
 Description=Fetch and display the daily bird dashboard on Pimoroni Inky
 Wants=network-online.target
-After=network-online.target
+After=network-online.target pisugar-server.service
 ConditionPathExists=/etc/bird-inky.env
+# Emergency recovery: placing this empty file on the SD card's boot partition
+# prevents the dashboard service from running, so the Pi remains available.
+ConditionPathExists=!/boot/firmware/bird-inky-stay-awake
+ConditionPathExists=!/boot/bird-inky-stay-awake
 
 [Service]
 Type=oneshot
