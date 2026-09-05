@@ -7,3 +7,5 @@ public/
 # Local configuration copied from the committed example.
 raspberry_pi/bird-dashboard.env
 
+# Local ESP32 Wi-Fi credentials copied from the committed example.
+esp32/bird_ee02/config.h

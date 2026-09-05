@@ -36,8 +36,18 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Render dashboard
+      - name: Render Raspberry Pi dashboard
         run: python build_dashboard.py --width 600 --height 448 --out public --require-image
+
+      - name: Render EE02 13.3-inch dashboard
+        run: >-
+          python build_dashboard.py
+          --width 1200
+          --height 1600
+          --out public
+          --require-image
+          --image-format jpeg
+          --ee02-palette
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v4

@@ -1,14 +1,19 @@
-# Bird Inky Dashboard
+# Bird Inky Dashboard: Raspberry Pi + EE02
 
 This project builds a new bird-of-the-day dashboard on GitHub Actions, publishes
-it with GitHub Pages, and displays it on a Pimoroni Inky screen attached to a
-Raspberry Pi.
+it with GitHub Pages, and displays it on either of these e-paper systems:
 
-The two halves are deliberately separate:
+- a Pimoroni Inky screen attached to a Raspberry Pi; or
+- a Seeed Studio XIAO ESP32-S3 Plus with an EE02 controller and 13.3-inch
+  Spectra 6/T133A01 panel.
 
-- GitHub renders `today.png` and `today.json` from `birds.json` once per day.
+The renderer and display clients are deliberately separate:
+
+- GitHub renders `today.png`, `today.jpg`, and `today.json` from `birds.json`
+  once per day. The JPEG is a six-color, `1200x1600` portrait image for EE02.
 - The Raspberry Pi downloads the rendered image, keeps the last good copy for
   offline fallback, updates the Inky display, and optionally shuts down.
+- The ESP32 downloads only the JPEG, updates the EE02 panel, and deep-sleeps.
 
 ## Project layout
 
@@ -18,6 +23,12 @@ The two halves are deliberately separate:
 ├── build_dashboard.py                     # Backend image renderer
 ├── birds.json                             # Bird list
 ├── requirements.txt                       # Backend dependencies
+├── esp32/
+│   ├── README.md                         # Arduino setup and flashing
+│   └── bird_ee02/
+│       ├── bird_ee02.ino                 # Wi-Fi/JPEG/display/sleep sketch
+│       ├── config.example.h              # Copy to the ignored config.h
+│       └── driver.h                      # EE02 Seeed_GFX selection
 └── raspberry_pi/
     ├── display_bird.py                    # Pi download/display program
     ├── bird-inky.service                  # systemd one-shot service
@@ -36,40 +47,39 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python build_dashboard.py --date 2026-08-05 --out public --no-birdnet --no-wikipedia
+python build_dashboard.py --date 2026-08-05 --width 1200 --height 1600 \
+  --out public --no-birdnet --no-wikipedia --image-format jpeg --ee02-palette
 open public/index.html
 ```
 
 The two `--no-*` flags make that first test deterministic and network-free. Omit
 them to test live BirdNET and Wikipedia enrichment.
 
-## Create the GitHub repository
-
-First, create an empty repository named `bird-inky-dashboard` on GitHub. Do not
-add a README, `.gitignore`, or license when GitHub asks, because those files are
-already in this workspace.
-
-Then run these commands from this project directory, replacing the username:
-
-```bash
-git init -b main .
-git add .
-git commit -m "Set up bird e-ink dashboard"
-git remote add origin https://github.com/YOUR_USERNAME/bird-inky-dashboard.git
-git push -u origin main
-```
+## Enable GitHub Pages
 
 In the GitHub repository, open **Settings > Pages** and set **Source** to
 **GitHub Actions**. Then open **Actions**, select **Build Bird Dashboard**, and
 run it once with **Run workflow**. The generated files will be available at:
 
 ```text
-https://YOUR_USERNAME.github.io/bird-inky-dashboard/today.png
-https://YOUR_USERNAME.github.io/bird-inky-dashboard/today.json
+https://YOUR_USERNAME.github.io/bird-ee02-dashboard/today.jpg
+https://YOUR_USERNAME.github.io/bird-ee02-dashboard/today.png
+https://YOUR_USERNAME.github.io/bird-ee02-dashboard/today.json
 ```
+
+`today.jpg` is the EE02 image. `today.png` remains available for the existing
+Raspberry Pi client.
 
 The scheduled workflow runs at 11:17 UTC each day. GitHub schedules use UTC, so
 adjust the cron expression in `.github/workflows/build-dashboard.yml` if a
 different local publish time is required.
+
+## Install on the ESP32
+
+See [`esp32/README.md`](esp32/README.md). In short: install `Seeed_GFX` and
+`JPEGDEC` in Arduino IDE, open `esp32/bird_ee02/bird_ee02.ino`, copy
+`config.example.h` to the ignored `config.h`, enter the Wi-Fi credentials and
+Pages JPEG URL, select **XIAO ESP32S3 Plus** with **OPI PSRAM**, and upload.
 
 ## Install on the Raspberry Pi
 
@@ -80,8 +90,8 @@ hardware test, then run:
 sudo apt update
 sudo apt install -y git
 cd ~
-git clone https://github.com/YOUR_USERNAME/bird-inky-dashboard.git
-cd bird-inky-dashboard/raspberry_pi
+git clone https://github.com/YOUR_USERNAME/bird-ee02-dashboard.git
+cd bird-ee02-dashboard/raspberry_pi
 sudo ./install.sh
 sudo nano /etc/bird-inky.env
 ```
@@ -133,7 +143,7 @@ available for SSH. Remove the file only after setting `BIRD_POWER_OFF=0`.
 The installer is safe to rerun. Pull changes and reinstall the managed files:
 
 ```bash
-cd ~/bird-inky-dashboard
+cd ~/bird-ee02-dashboard
 git pull --ff-only
 cd raspberry_pi
 sudo ./install.sh

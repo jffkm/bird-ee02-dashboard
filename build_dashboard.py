@@ -7,6 +7,8 @@ Expected output directory: public/
 
 Example:
     python build_dashboard.py --width 600 --height 448 --out public
+    python build_dashboard.py --width 1200 --height 1600 --out public \
+        --image-format jpeg --ee02-palette
 """
 
 from __future__ import annotations
@@ -104,6 +106,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--date", help="Override date as YYYY-MM-DD. Useful for testing.")
     parser.add_argument("--seed", help="Optional extra seed string for bird selection.")
     parser.add_argument("--saturation", type=float, default=0.95, help="Photo color saturation multiplier.")
+    parser.add_argument(
+        "--image-format",
+        default="png",
+        choices=["png", "jpeg"],
+        help="Dashboard image format. JPEG is published as today.jpg.",
+    )
+    parser.add_argument(
+        "--ee02-palette",
+        action="store_true",
+        help="Dither the output to the EE02 panel's six-color palette.",
+    )
     parser.add_argument("--birdnet-size", default="medium", choices=["thumb", "medium"], help="BirdNET image size.")
     parser.add_argument("--no-birdnet", action="store_true", help="Do not enrich entries from BirdNET.")
     parser.add_argument("--no-wikipedia", action="store_true", help="Do not enrich entries from Wikipedia summaries.")
@@ -1033,15 +1046,51 @@ def text_line_step(draw: ImageDraw.ImageDraw, fnt: ImageFont.ImageFont, multipli
     return max(1, round(text_size(draw, "Ag", fnt)[1] * multiplier))
 
 
-def write_outputs(out_dir: Path, image: Image.Image, metadata: dict[str, Any]) -> None:
+def quantize_for_ee02(image: Image.Image) -> Image.Image:
+    """Convert an RGB dashboard to the six colors supported by the EE02 panel."""
+    palette_colors = [
+        (255, 255, 255),  # white
+        (29, 185, 84),  # green
+        (229, 57, 53),  # red
+        (255, 216, 0),  # yellow
+        (0, 76, 255),  # blue
+        (0, 0, 0),  # black
+    ]
+    palette = Image.new("P", (1, 1))
+    flat_palette = [channel for color in palette_colors for channel in color]
+    palette.putpalette(flat_palette + [0] * (768 - len(flat_palette)))
+    return image.quantize(
+        palette=palette,
+        dither=Image.Dither.FLOYDSTEINBERG,
+    ).convert("RGB")
+
+
+def write_outputs(
+    out_dir: Path,
+    image: Image.Image,
+    metadata: dict[str, Any],
+    image_format: str = "png",
+) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    image_path = out_dir / "today.png"
+    image_filename = "today.jpg" if image_format == "jpeg" else "today.png"
+    image_path = out_dir / image_filename
     json_path = out_dir / "today.json"
     index_path = out_dir / "index.html"
+    metadata["dashboard_image"] = image_filename
 
-    tmp_image = image_path.with_suffix(".png.tmp")
-    image.save(tmp_image, format="PNG", optimize=True)
+    tmp_image = image_path.with_suffix(image_path.suffix + ".tmp")
+    if image_format == "jpeg":
+        image.save(
+            tmp_image,
+            format="JPEG",
+            quality=90,
+            subsampling=0,
+            optimize=True,
+            progressive=False,
+        )
+    else:
+        image.save(tmp_image, format="PNG", optimize=True)
     os.replace(tmp_image, image_path)
 
     tmp_json = json_path.with_suffix(".json.tmp")
@@ -1067,6 +1116,7 @@ def render_index(metadata: dict[str, Any]) -> str:
     source_link = f'<a href="{html.escape(source)}">{source_name}</a>' if source else source_name
     image_credit = html.escape(" | ".join(item for item in [bird.get("image_credit"), bird.get("image_license")] if item))
     image_credit_html = f"<p>{image_credit}</p>" if image_credit else ""
+    dashboard_image = html.escape(metadata.get("dashboard_image") or "today.png")
 
     return textwrap.dedent(
         f"""\
@@ -1139,7 +1189,7 @@ def render_index(metadata: dict[str, Any]) -> str:
         </head>
         <body>
           <main>
-            <img src="today.png" alt="Bird dashboard for {title}">
+            <img src="{dashboard_image}" alt="Bird dashboard for {title}">
             <h1>{title}</h1>
             <div class="scientific"><em>{sci}</em></div>
 
@@ -1197,6 +1247,9 @@ def main() -> None:
         bird, birdnet_warnings = enrich_from_birdnet(bird, args.birdnet_size)
         enrichment_warnings.extend(birdnet_warnings)
     image, metadata = render_dashboard(bird, date_text, args.width, args.height, args.saturation)
+    if args.ee02_palette:
+        image = quantize_for_ee02(image)
+        metadata["palette"] = "seeed-ee02-six-color"
     metadata["warnings"] = enrichment_warnings + metadata.get("warnings", [])
     if args.require_image and not metadata["image"]["loaded"]:
         warnings = "; ".join(metadata["warnings"]) or "unknown image loading failure"
@@ -1205,10 +1258,11 @@ def main() -> None:
             f"Attempted: {metadata['image']['url'] or metadata['image']['path']}. "
             f"Reason: {warnings}"
         )
-    write_outputs(Path(args.out), image, metadata)
+    write_outputs(Path(args.out), image, metadata, args.image_format)
 
     print(f"Rendered {bird.common_name} for {date_text}")
-    print(f"Wrote {Path(args.out) / 'today.png'}")
+    image_filename = "today.jpg" if args.image_format == "jpeg" else "today.png"
+    print(f"Wrote {Path(args.out) / image_filename}")
 
 
 if __name__ == "__main__":
