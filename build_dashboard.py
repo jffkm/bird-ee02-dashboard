@@ -301,10 +301,10 @@ def wikipedia_page_url(record: dict[str, Any]) -> str | None:
 
 
 def wikipedia_image_url(record: dict[str, Any]) -> str | None:
-    # The summary API's thumbnail is already a web-friendly raster and is
-    # normally large enough for the e-ink photo panel. Fall back to the
-    # original image when a page does not provide a thumbnail.
-    for key in ["thumbnail", "originalimage"]:
+    # Prefer the original so large e-ink panels are not forced to upscale
+    # Wikipedia's small summary thumbnail. Keep the thumbnail as a fallback
+    # for pages that do not expose an original image.
+    for key in ["originalimage", "thumbnail"]:
         image = record.get(key)
         if isinstance(image, dict):
             source = clean_optional(image.get("source"))
