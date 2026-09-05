@@ -15,10 +15,11 @@ happen in GitHub Actions. The published ESP32 image is exactly `1200x1600`.
 
 ## Arduino IDE setup
 
-Install these libraries with **Tools > Manage Libraries**:
+Install these libraries:
 
-- `Seeed_GFX` 2.0.3 or newer
-- `JPEGDEC` by Larry Bank
+- `Seeed_GFX` 2.0.3 or newer, using Seeed's GitHub/ZIP installation described
+  in the EE02 setup guide
+- `JPEGDEC` by Larry Bank, using **Tools > Manage Libraries**
 
 Select the board and options:
 
