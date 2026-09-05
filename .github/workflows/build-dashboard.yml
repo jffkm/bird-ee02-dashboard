@@ -49,6 +49,9 @@ jobs:
           --image-format jpeg
           --ee02-palette
 
+      - name: Render EE02 13.3-inch bird plate
+        run: python build_birdplate.py --out public
+
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:

@@ -1189,11 +1189,19 @@ def render_index(metadata: dict[str, Any]) -> str:
             a {{
               color: #386892;
             }}
+            .image-choices {{
+              margin: 10px 0 24px;
+            }}
           </style>
         </head>
         <body>
           <main>
             <img src="{dashboard_image}" alt="Bird dashboard for {title}">
+            <p class="image-choices">
+              EE02 images:
+              <a href="today.jpg">dashboard</a> ·
+              <a href="birdplate.jpg">bird plate</a>
+            </p>
             <h1>{title}</h1>
             <div class="scientific"><em>{sci}</em></div>
 

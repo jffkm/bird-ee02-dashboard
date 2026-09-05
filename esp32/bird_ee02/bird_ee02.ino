@@ -66,7 +66,7 @@ bool configurationIsReady() {
     return false;
   }
   if (!url.startsWith("https://") || !url.endsWith(".jpg")) {
-    Serial.println("[config] IMAGE_URL must be the HTTPS URL for today.jpg");
+    Serial.println("[config] IMAGE_URL must be an HTTPS URL ending in .jpg");
     return false;
   }
   return true;

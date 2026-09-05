@@ -10,7 +10,9 @@ it with GitHub Pages, and displays it on either of these e-paper systems:
 The renderer and display clients are deliberately separate:
 
 - GitHub renders `today.png`, `today.jpg`, and `today.json` from `birds.json`
-  once per day. The JPEG is a six-color, `1200x1600` portrait image for EE02.
+  once per day. It also selects one reviewed Inky Bird Frame plate and publishes
+  `birdplate.jpg` plus `birdplate.json`. Both JPEGs are six-color,
+  `1200x1600` portrait images for EE02.
 - The Raspberry Pi downloads the rendered image, keeps the last good copy for
   offline fallback, updates the Inky display, and optionally shuts down.
 - The ESP32 downloads only the JPEG, updates the EE02 panel, and deep-sleeps.
@@ -21,6 +23,7 @@ The renderer and display clients are deliberately separate:
 .
 ├── .github/workflows/build-dashboard.yml  # Daily build and Pages deployment
 ├── build_dashboard.py                     # Backend image renderer
+├── build_birdplate.py                     # Daily plate selector/EE02 renderer
 ├── birds.json                             # Bird list
 ├── requirements.txt                       # Backend dependencies
 ├── esp32/
@@ -49,6 +52,7 @@ python -m pip install -r requirements.txt
 python build_dashboard.py --date 2026-08-05 --out public --no-birdnet --no-wikipedia
 python build_dashboard.py --date 2026-08-05 --width 1200 --height 1600 \
   --out public --no-birdnet --no-wikipedia --image-format jpeg --ee02-palette
+python build_birdplate.py --date 2026-08-05 --out public
 open public/index.html
 ```
 
@@ -63,12 +67,26 @@ run it once with **Run workflow**. The generated files will be available at:
 
 ```text
 https://YOUR_USERNAME.github.io/bird-ee02-dashboard/today.jpg
+https://YOUR_USERNAME.github.io/bird-ee02-dashboard/birdplate.jpg
+https://YOUR_USERNAME.github.io/bird-ee02-dashboard/birdplate.json
 https://YOUR_USERNAME.github.io/bird-ee02-dashboard/today.png
 https://YOUR_USERNAME.github.io/bird-ee02-dashboard/today.json
 ```
 
 `today.jpg` is the EE02 image. `today.png` remains available for the existing
-Raspberry Pi client.
+Raspberry Pi client. `birdplate.jpg` is a daily, deterministic selection from
+the reviewed public catalog in
+[`veteranbv/inky-bird-frame`](https://github.com/veteranbv/inky-bird-frame).
+The Action downloads only the selected portrait plate and publishes only its
+EE02-ready JPEG, so this repository does not duplicate the roughly 500 MB plate
+collection.
+
+To pin a particular species instead of rotating daily, add its slug to the
+bird-plate workflow command, for example:
+
+```yaml
+run: python build_birdplate.py --out public --slug eastern-bluebird
+```
 
 The scheduled workflow runs at 11:17 UTC each day. GitHub schedules use UTC, so
 adjust the cron expression in `.github/workflows/build-dashboard.yml` if a
@@ -78,8 +96,10 @@ different local publish time is required.
 
 See [`esp32/README.md`](esp32/README.md). In short: install `Seeed_GFX` and
 `JPEGDEC` in Arduino IDE, open `esp32/bird_ee02/bird_ee02.ino`, copy
-`config.example.h` to the ignored `config.h`, enter the Wi-Fi credentials and
-Pages JPEG URL, select **XIAO ESP32S3 Plus** with **OPI PSRAM**, and upload.
+`config.example.h` to the ignored `config.h`, enter the Wi-Fi credentials,
+choose dashboard or bird plate, select **XIAO ESP32S3 Plus** with **OPI
+PSRAM**, and upload. After the first successful bench test, enable deep sleep
+and upload at the morning time when the daily cycle should begin.
 
 ## Install on the Raspberry Pi
 
