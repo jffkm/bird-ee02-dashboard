@@ -1081,12 +1081,16 @@ def write_outputs(
 
     tmp_image = image_path.with_suffix(image_path.suffix + ".tmp")
     if image_format == "jpeg":
+        # Pillow's optimized JPEG encoder can exhaust its output buffer on
+        # high-entropy, Floyd-Steinberg-dithered panel images. The default
+        # encoder is reliable here and still keeps the result small enough
+        # for the ESP32 download buffer.
         image.save(
             tmp_image,
             format="JPEG",
             quality=90,
             subsampling=0,
-            optimize=True,
+            optimize=False,
             progressive=False,
         )
     else:
