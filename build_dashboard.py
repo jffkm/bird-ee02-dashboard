@@ -724,21 +724,25 @@ def load_bird_image(
         return placeholder_image(target, bird), warning, details
 
     source = ImageOps.exif_transpose(source).convert("RGB")
+    details["source_width"] = source.width
+    details["source_height"] = source.height
+    details["fit"] = "contain"
     if saturation != 1.0:
         source = ImageEnhance.Color(source).enhance(max(0.0, saturation))
 
     details["loaded"] = True
-    return cover_crop(source, target), warning, details
+    return contain_photo(source, target), warning, details
 
 
-def cover_crop(img: Image.Image, target: tuple[int, int]) -> Image.Image:
-    target_w, target_h = target
-    scale = max(target_w / img.width, target_h / img.height)
-    resized = img.resize((round(img.width * scale), round(img.height * scale)), Image.Resampling.LANCZOS)
-
-    left = max(0, (resized.width - target_w) // 2)
-    top = max(0, (resized.height - target_h) // 2)
-    return resized.crop((left, top, left + target_w, top + target_h))
+def contain_photo(img: Image.Image, target: tuple[int, int]) -> Image.Image:
+    """Fit the complete photo inside the dashboard frame without cropping it."""
+    return ImageOps.pad(
+        img,
+        target,
+        method=Image.Resampling.LANCZOS,
+        color=PAPER,
+        centering=(0.5, 0.5),
+    )
 
 
 def placeholder_image(target: tuple[int, int], bird: Bird) -> Image.Image:
