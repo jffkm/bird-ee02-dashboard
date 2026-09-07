@@ -4,15 +4,17 @@
 constexpr char WIFI_SSID[] = "YOUR_WIFI_NAME";
 constexpr char WIFI_PASSWORD[] = "YOUR_WIFI_PASSWORD";
 
-// Pick one image. GitHub Pages replaces both files each morning, while these
-// URLs stay constant, so the ESP32 does not need to understand the catalog.
+// GitHub Pages replaces these files each morning while their URLs stay fixed.
+// DAILY_FRAME_IMAGE_URL makes one stable 50/50 dashboard-or-plate choice per day.
+constexpr char DAILY_FRAME_IMAGE_URL[] =
+    "https://jffkm.github.io/bird-ee02-dashboard/frame.jpg";
 constexpr char DASHBOARD_IMAGE_URL[] =
     "https://jffkm.github.io/bird-ee02-dashboard/today.jpg";
 constexpr char BIRD_PLATE_IMAGE_URL[] =
     "https://jffkm.github.io/bird-ee02-dashboard/birdplate.jpg";
-constexpr bool SHOW_BIRD_PLATE = false;
-constexpr const char *IMAGE_URL =
-    SHOW_BIRD_PLATE ? BIRD_PLATE_IMAGE_URL : DASHBOARD_IMAGE_URL;
+constexpr const char *IMAGE_URL = DAILY_FRAME_IMAGE_URL;
+// To lock the device to one style, use DASHBOARD_IMAGE_URL or
+// BIRD_PLATE_IMAGE_URL instead.
 
 // Leave this false for the first bench test so the serial monitor stays open.
 // Set it true after the display updates successfully.

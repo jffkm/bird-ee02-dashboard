@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -165,6 +166,53 @@ def write_outputs(
     os.replace(tmp_metadata, metadata_path)
 
 
+def choose_daily_frame_source(date_text: str, seed: str) -> str:
+    """Make a stable 50/50 choice that changes only when the date changes."""
+    digest = hashlib.sha256(f"{date_text}:{seed}:frame-source".encode("utf-8")).digest()
+    return "birdplate" if digest[0] & 1 else "dashboard"
+
+
+def publish_daily_frame(out_dir: Path, date_text: str, seed: str) -> str:
+    source_kind = choose_daily_frame_source(date_text, seed)
+    source_stem = "birdplate" if source_kind == "birdplate" else "today"
+    source_image = out_dir / f"{source_stem}.jpg"
+    source_metadata = out_dir / f"{source_stem}.json"
+    if not source_image.is_file() or not source_metadata.is_file():
+        raise SystemExit(
+            "Both today.jpg/today.json and birdplate.jpg/birdplate.json must "
+            "exist before publishing the daily frame."
+        )
+
+    frame_image = out_dir / "frame.jpg"
+    tmp_frame = frame_image.with_suffix(".jpg.tmp")
+    shutil.copyfile(source_image, tmp_frame)
+    os.replace(tmp_frame, frame_image)
+
+    metadata = json.loads(source_metadata.read_text(encoding="utf-8"))
+    frame_metadata = {
+        "date": date_text,
+        "selection": "daily-deterministic-coin-flip",
+        "selected_source": source_kind,
+        "selected_filename": source_image.name,
+        "image": {
+            "filename": frame_image.name,
+            "width": PANEL_SIZE[0],
+            "height": PANEL_SIZE[1],
+            "format": "JPEG",
+            "bytes": frame_image.stat().st_size,
+        },
+        "bird": metadata.get("bird"),
+    }
+    frame_metadata_path = out_dir / "frame.json"
+    tmp_metadata = frame_metadata_path.with_suffix(".json.tmp")
+    tmp_metadata.write_text(
+        json.dumps(frame_metadata, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(tmp_metadata, frame_metadata_path)
+    return source_kind
+
+
 def main() -> None:
     args = parse_args()
     date_text = selected_date(args.timezone, args.date)
@@ -175,8 +223,10 @@ def main() -> None:
     write_outputs(
         Path(args.out), image, plate, date_text, catalog, image_url, bool(args.slug)
     )
+    source_kind = publish_daily_frame(Path(args.out), date_text, args.seed)
     print(f"Rendered bird plate: {plate.get('common_name')} for {date_text}")
     print(f"Wrote {Path(args.out) / 'birdplate.jpg'}")
+    print(f"Published {source_kind} as {Path(args.out) / 'frame.jpg'}")
 
 
 if __name__ == "__main__":

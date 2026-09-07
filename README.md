@@ -12,7 +12,8 @@ The renderer and display clients are deliberately separate:
 - GitHub renders `today.png`, `today.jpg`, and `today.json` from `birds.json`
   once per day. It also selects one reviewed Inky Bird Frame plate and publishes
   `birdplate.jpg` plus `birdplate.json`. Both JPEGs are six-color,
-  `1200x1600` portrait images for EE02.
+  `1200x1600` portrait images for EE02. A stable daily coin flip copies one of
+  them to `frame.jpg` for the ESP32.
 - The Raspberry Pi downloads the rendered image, keeps the last good copy for
   offline fallback, updates the Inky display, and optionally shuts down.
 - The ESP32 downloads only the JPEG, updates the EE02 panel, and deep-sleeps.
@@ -69,6 +70,8 @@ run it once with **Run workflow**. The generated files will be available at:
 https://YOUR_USERNAME.github.io/bird-ee02-dashboard/today.jpg
 https://YOUR_USERNAME.github.io/bird-ee02-dashboard/birdplate.jpg
 https://YOUR_USERNAME.github.io/bird-ee02-dashboard/birdplate.json
+https://YOUR_USERNAME.github.io/bird-ee02-dashboard/frame.jpg
+https://YOUR_USERNAME.github.io/bird-ee02-dashboard/frame.json
 https://YOUR_USERNAME.github.io/bird-ee02-dashboard/today.png
 https://YOUR_USERNAME.github.io/bird-ee02-dashboard/today.json
 ```
@@ -80,6 +83,11 @@ the reviewed public catalog in
 The Action downloads only the selected portrait plate and publishes only its
 EE02-ready JPEG, so this repository does not duplicate the roughly 500 MB plate
 collection.
+
+`frame.jpg` is the recommended EE02 URL. Each date hashes to a 50/50 choice
+between the generated dashboard and the selected plate. The choice is stable
+for the entire day, including manual workflow reruns or device resets, while
+consecutive days may independently choose the same style.
 
 To pin a particular species instead of rotating daily, add its slug to the
 bird-plate workflow command, for example:
@@ -97,9 +105,10 @@ different local publish time is required.
 See [`esp32/README.md`](esp32/README.md). In short: install `Seeed_GFX` and
 `JPEGDEC` in Arduino IDE, open `esp32/bird_ee02/bird_ee02.ino`, copy
 `config.example.h` to the ignored `config.h`, enter the Wi-Fi credentials,
-choose dashboard or bird plate, select **XIAO ESP32S3 Plus** with **OPI
-PSRAM**, and upload. After the first successful bench test, enable deep sleep
-and upload at the morning time when the daily cycle should begin.
+use the daily-mix URL (or lock it to either style), select **XIAO ESP32S3
+Plus** with **OPI PSRAM**, and upload. After the first successful bench test,
+enable deep sleep and upload at the morning time when the daily cycle should
+begin.
 
 ## Install on the Raspberry Pi
 

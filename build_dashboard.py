@@ -1203,6 +1203,7 @@ def render_index(metadata: dict[str, Any]) -> str:
             <img src="{dashboard_image}" alt="Bird dashboard for {title}">
             <p class="image-choices">
               EE02 images:
+              <a href="frame.jpg">daily mix</a> ·
               <a href="today.jpg">dashboard</a> ·
               <a href="birdplate.jpg">bird plate</a>
             </p>

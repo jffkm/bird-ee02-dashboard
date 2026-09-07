@@ -5,7 +5,7 @@ ESP32-S3 Plus, EE02 controller board, and 13.3-inch Spectra 6/T133A01 panel.
 It is intentionally a simple network picture frame:
 
 1. Connect to Wi-Fi.
-2. Download either `today.jpg` or `birdplate.jpg` from GitHub Pages.
+2. Download `frame.jpg`, GitHub's daily dashboard-or-plate selection.
 3. Decode it into the EE02 six-color framebuffer.
 4. Refresh the panel.
 5. Deep-sleep until the next update.
@@ -45,9 +45,9 @@ No custom partition table or filesystem is required.
 2. Copy `config.example.h` to `config.h` in the same sketch folder.
 3. Put the network name inside `WIFI_SSID` and its password inside
    `WIFI_PASSWORD`. Do not remove the quotation marks.
-4. Set `SHOW_BIRD_PLATE`:
-   - `false` displays the photo-and-facts dashboard (`today.jpg`).
-   - `true` displays the full-page reviewed illustration (`birdplate.jpg`).
+4. Leave `IMAGE_URL` set to `DAILY_FRAME_IMAGE_URL` for a daily 50/50 choice.
+   To lock the frame to one style, set it to `DASHBOARD_IMAGE_URL` or
+   `BIRD_PLATE_IMAGE_URL` instead.
 5. Leave `ENABLE_DEEP_SLEEP` set to `false` for the first upload.
 
 The relevant part of `config.h` should look like this:
@@ -55,7 +55,7 @@ The relevant part of `config.h` should look like this:
 ```cpp
 constexpr char WIFI_SSID[] = "Your 2.4 GHz network name";
 constexpr char WIFI_PASSWORD[] = "Your Wi-Fi password";
-constexpr bool SHOW_BIRD_PLATE = false;
+constexpr const char *IMAGE_URL = DAILY_FRAME_IMAGE_URL;
 constexpr bool ENABLE_DEEP_SLEEP = false;
 ```
 
@@ -122,10 +122,11 @@ For this repository, the Pages image URL is:
 ```text
 https://jffkm.github.io/bird-ee02-dashboard/today.jpg
 https://jffkm.github.io/bird-ee02-dashboard/birdplate.jpg
+https://jffkm.github.io/bird-ee02-dashboard/frame.jpg
 ```
 
-You can preview either URL in a browser. The filename stays the same while the
-GitHub Action replaces its content each morning.
+Use `frame.jpg` for the daily mix. You can preview all three URLs in a browser;
+their filenames stay the same while GitHub replaces their content each morning.
 
 ## HTTPS note
 
