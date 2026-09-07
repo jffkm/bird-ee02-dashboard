@@ -107,8 +107,9 @@ See [`esp32/README.md`](esp32/README.md). In short: install `Seeed_GFX` and
 `config.example.h` to the ignored `config.h`, enter the Wi-Fi credentials,
 use the daily-mix URL (or lock it to either style), select **XIAO ESP32S3
 Plus** with **OPI PSRAM**, and upload. After the first successful bench test,
-enable deep sleep and upload at the morning time when the daily cycle should
-begin.
+enable deep sleep and upload again. The device synchronizes its clock over NTP
+on every wake and schedules the next successful refresh for **7:00 AM Pacific**,
+including automatic PST/PDT adjustment.
 
 ## Install on the Raspberry Pi
 

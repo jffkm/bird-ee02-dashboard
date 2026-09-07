@@ -5,7 +5,8 @@
  *   - 13.3-inch Spectra 6 / T133A01 panel
  *
  * The device downloads one 1200x1600 JPEG from GitHub Pages, maps its pixels
- * to the panel's six colors, refreshes the panel, and sleeps.
+ * to the panel's six colors, refreshes the panel, and sleeps until the next
+ * configured local refresh time.
  */
 
 #include <Arduino.h>
@@ -26,6 +27,7 @@
 #include <WiFiClientSecure.h>
 #include <esp_heap_caps.h>
 #include <esp_sleep.h>
+#include <time.h>
 
 namespace {
 
@@ -36,6 +38,9 @@ constexpr size_t FRAMEBUFFER_BYTES =
 constexpr size_t MAX_JPEG_BYTES = 4U * 1024U * 1024U;
 constexpr uint32_t WIFI_TIMEOUT_MS = 30000;
 constexpr uint32_t DOWNLOAD_IDLE_TIMEOUT_MS = 30000;
+constexpr uint32_t NTP_TIMEOUT_MS = 20000;
+constexpr char PRIMARY_NTP_SERVER[] = "pool.ntp.org";
+constexpr char SECONDARY_NTP_SERVER[] = "time.nist.gov";
 
 struct PaletteColor {
   uint8_t r;
@@ -69,6 +74,11 @@ bool configurationIsReady() {
     Serial.println("[config] IMAGE_URL must be an HTTPS URL ending in .jpg");
     return false;
   }
+  if (String(TIMEZONE_RULE).isEmpty() || DAILY_REFRESH_HOUR > 23 ||
+      DAILY_REFRESH_MINUTE > 59) {
+    Serial.println("[config] Time zone or daily refresh time is invalid");
+    return false;
+  }
   return true;
 }
 
@@ -92,6 +102,60 @@ bool connectToWifi() {
 
   Serial.printf("[wifi] Connected: %s, RSSI %d dBm\n",
                 WiFi.localIP().toString().c_str(), WiFi.RSSI());
+  return true;
+}
+
+bool syncClock() {
+  Serial.println("[time] Synchronizing clock with NTP");
+  configTzTime(TIMEZONE_RULE, PRIMARY_NTP_SERVER, SECONDARY_NTP_SERVER);
+
+  struct tm localTime = {};
+  if (!getLocalTime(&localTime, NTP_TIMEOUT_MS)) {
+    Serial.println("[time] NTP sync failed; using the fallback sleep interval");
+    return false;
+  }
+
+  char timestamp[48] = {};
+  strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S %Z", &localTime);
+  Serial.printf("[time] Local time: %s\n", timestamp);
+  return true;
+}
+
+bool calculateNextDailyWake(uint64_t &wakeAfterUs, char *target,
+                            size_t targetSize) {
+  const time_t now = time(nullptr);
+  struct tm nextLocal = {};
+  if (now < 0 || localtime_r(&now, &nextLocal) == nullptr) {
+    return false;
+  }
+
+  nextLocal.tm_hour = DAILY_REFRESH_HOUR;
+  nextLocal.tm_min = DAILY_REFRESH_MINUTE;
+  nextLocal.tm_sec = 0;
+  nextLocal.tm_isdst = -1;
+
+  time_t nextWake = mktime(&nextLocal);
+  if (nextWake == static_cast<time_t>(-1)) {
+    return false;
+  }
+  if (nextWake <= now) {
+    nextLocal.tm_mday += 1;
+    nextLocal.tm_hour = DAILY_REFRESH_HOUR;
+    nextLocal.tm_min = DAILY_REFRESH_MINUTE;
+    nextLocal.tm_sec = 0;
+    nextLocal.tm_isdst = -1;
+    nextWake = mktime(&nextLocal);
+  }
+
+  if (nextWake == static_cast<time_t>(-1) || nextWake <= now) {
+    return false;
+  }
+
+  const uint64_t seconds = static_cast<uint64_t>(nextWake - now);
+  wakeAfterUs = seconds * 1000000ULL;
+  if (target != nullptr && targetSize > 0) {
+    strftime(target, targetSize, "%Y-%m-%d %H:%M:%S %Z", &nextLocal);
+  }
   return true;
 }
 
@@ -268,22 +332,37 @@ bool displayJpeg(uint8_t *data, size_t size) {
   return true;
 }
 
-void finishCycle(bool succeeded) {
+void finishCycle(bool succeeded, bool clockSynced) {
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
 
-  const uint32_t minutes =
-      succeeded ? REFRESH_MINUTES : ERROR_RETRY_MINUTES;
-  Serial.printf("[power] %s; next attempt in %lu minutes\n",
-                succeeded ? "Success" : "Failed; existing display retained",
-                static_cast<unsigned long>(minutes));
+  uint64_t wakeAfterUs = 0;
+  bool usingDailySchedule = false;
+
+  if (succeeded && clockSynced) {
+    char target[48] = {};
+    usingDailySchedule =
+        calculateNextDailyWake(wakeAfterUs, target, sizeof(target));
+    if (usingDailySchedule) {
+      Serial.printf("[power] Success; next refresh at %s\n", target);
+    }
+  }
+
+  if (!usingDailySchedule) {
+    const uint32_t minutes =
+        succeeded ? REFRESH_FALLBACK_MINUTES : ERROR_RETRY_MINUTES;
+    const uint32_t safeMinutes = minutes > 0 ? minutes : 1;
+    wakeAfterUs =
+        static_cast<uint64_t>(safeMinutes) * 60ULL * 1000000ULL;
+    Serial.printf("[power] %s; next attempt in %lu minutes\n",
+                  succeeded ? "Success without a synchronized clock"
+                            : "Failed; existing display retained",
+                  static_cast<unsigned long>(safeMinutes));
+  }
   Serial.flush();
 
   if (ENABLE_DEEP_SLEEP) {
-    const uint32_t safeMinutes = minutes > 0 ? minutes : 1;
-    const uint64_t wakeAfter =
-        static_cast<uint64_t>(safeMinutes) * 60ULL * 1000000ULL;
-    esp_sleep_enable_timer_wakeup(wakeAfter);
+    esp_sleep_enable_timer_wakeup(wakeAfterUs);
     esp_deep_sleep_start();
   }
 
@@ -303,6 +382,7 @@ void setup() {
                 static_cast<unsigned long>(ESP.getPsramSize()));
 
   bool succeeded = false;
+  bool clockSynced = false;
   uint8_t *jpegData = nullptr;
   size_t jpegSize = 0;
 
@@ -310,14 +390,17 @@ void setup() {
     Serial.println("[memory] PSRAM not found; select OPI PSRAM in Arduino IDE");
   } else if (!configurationIsReady()) {
     Serial.println("[config] Configuration is incomplete");
-  } else if (connectToWifi() && downloadJpeg(jpegData, jpegSize)) {
-    succeeded = displayJpeg(jpegData, jpegSize);
+  } else if (connectToWifi()) {
+    clockSynced = syncClock();
+    if (downloadJpeg(jpegData, jpegSize)) {
+      succeeded = displayJpeg(jpegData, jpegSize);
+    }
   }
 
   if (jpegData != nullptr) {
     heap_caps_free(jpegData);
   }
-  finishCycle(succeeded);
+  finishCycle(succeeded, clockSynced);
 }
 
 void loop() {}

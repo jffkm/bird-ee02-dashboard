@@ -20,7 +20,13 @@ constexpr const char *IMAGE_URL = DAILY_FRAME_IMAGE_URL;
 // Set it true after the display updates successfully.
 constexpr bool ENABLE_DEEP_SLEEP = false;
 
-// Deep sleep is a relative timer. Upload or reset the board at the morning
-// time when you want it to refresh; it will wake about every 24 hours after.
-constexpr uint32_t REFRESH_MINUTES = 24U * 60U;
+// Wake for a successful daily refresh at 7:00 AM Pacific time. This POSIX time
+// zone rule automatically switches between PST and PDT.
+constexpr char TIMEZONE_RULE[] = "PST8PDT,M3.2.0/2,M11.1.0/2";
+constexpr uint8_t DAILY_REFRESH_HOUR = 7;
+constexpr uint8_t DAILY_REFRESH_MINUTE = 0;
+
+// Used only if NTP time synchronization fails. Failed image/display attempts
+// keep the existing e-paper image visible and use the shorter retry interval.
+constexpr uint32_t REFRESH_FALLBACK_MINUTES = 24U * 60U;
 constexpr uint32_t ERROR_RETRY_MINUTES = 6U * 60U;
