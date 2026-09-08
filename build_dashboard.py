@@ -65,6 +65,7 @@ class Bird:
     range: str | None = None
     description: str | None = None
     source_name: str | None = None
+    birdnet: dict[str, Any] | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Bird":
@@ -119,6 +120,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--birdnet-size", default="medium", choices=["thumb", "medium"], help="BirdNET image size.")
     parser.add_argument("--no-birdnet", action="store_true", help="Do not enrich entries from BirdNET.")
+    parser.add_argument(
+        "--require-birdnet",
+        action="store_true",
+        help="Fail unless a fresh BirdNET taxonomy record is fetched for the selected bird.",
+    )
     parser.add_argument("--no-wikipedia", action="store_true", help="Do not enrich entries from Wikipedia summaries.")
     parser.add_argument("--require-image", action="store_true", help="Fail instead of rendering a placeholder.")
     return parser.parse_args()
@@ -182,8 +188,11 @@ def wikipedia_summary_url(title: str) -> str:
     return f"{WIKIPEDIA_SUMMARY_BASE}/{encoded}"
 
 
-def fetch_json(url: str) -> dict[str, Any]:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+def fetch_json(url: str, fresh: bool = False) -> dict[str, Any]:
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+    if fresh:
+        headers["Cache-Control"] = "no-cache"
+    request = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(request, timeout=30) as response:
         return json.loads(response.read().decode("utf-8"))
 
@@ -197,18 +206,41 @@ def enrich_from_birdnet(bird: Bird, image_size: str) -> tuple[Bird, list[str]]:
     if not bird.image_url and not bird.image_path:
         bird.image_url = birdnet_image_url(bird.scientific_name, image_size)
 
-    needs_species = not bird.common_name or not bird.facts or not bird.status or not bird.range or not bird.source_url
-    if not needs_species:
-        return bird, warnings
-
     try:
-        record = fetch_json(birdnet_species_url(bird.scientific_name))
+        record = fetch_json(birdnet_species_url(bird.scientific_name), fresh=True)
     except Exception as exc:  # noqa: BLE001 - the dashboard can still render with local fields.
         warnings.append(f"BirdNET species lookup failed: {exc}")
         return bird, warnings
 
     if "species" in record and isinstance(record["species"], dict):
         record = record["species"]
+
+    returned_scientific_name = first_text(record, "scientific_name", "scientificName")
+    if (
+        returned_scientific_name
+        and returned_scientific_name.casefold() != bird.scientific_name.casefold()
+    ):
+        warnings.append(
+            "BirdNET taxonomy lookup returned a different species: "
+            f"{returned_scientific_name}."
+        )
+        return bird, warnings
+
+    image_record = record.get("image") if isinstance(record.get("image"), dict) else {}
+    birdnet_api_url = birdnet_species_url(bird.scientific_name)
+    bird.birdnet = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_url": birdnet_api_url,
+        "taxonomy_version": clean_optional(record.get("taxonomy_version")),
+        "birdnet_id": clean_optional(record.get("birdnet_id")),
+        "observations_count": record.get("observations_count"),
+        "image": {
+            "url": clean_optional(image_record.get("src")),
+            "source": clean_optional(image_record.get("source")),
+            "author": clean_optional(image_record.get("author")),
+            "license": clean_optional(image_record.get("license")),
+        },
+    }
 
     bird.common_name = bird.common_name or first_text_deep(
         record,
@@ -224,10 +256,19 @@ def enrich_from_birdnet(bird: Bird, image_size: str) -> tuple[Bird, list[str]]:
     bird.source_url = bird.source_url or first_text_deep(record, "wikipedia_url", "source_url")
     bird.source_name = bird.source_name or "BirdNET+ Taxonomy"
 
-    if not bird.image_credit:
-        bird.image_credit = first_text_deep(record, "image_credit", "image_attribution", "photo_credit", "photographer")
-    if not bird.image_license:
-        bird.image_license = first_text_deep(record, "image_license", "license")
+    birdnet_image_urls = {
+        value
+        for value in [
+            clean_optional(image_record.get("src")),
+            clean_optional(image_record.get("thumb")),
+            clean_optional(image_record.get("medium")),
+            birdnet_image_url(bird.scientific_name, image_size),
+        ]
+        if value
+    }
+    if bird.image_url in birdnet_image_urls:
+        bird.image_credit = bird.image_credit or clean_optional(image_record.get("author"))
+        bird.image_license = bird.image_license or clean_optional(image_record.get("license"))
 
     if not bird.facts:
         bird.facts = facts_from_species_record(bird, record)
@@ -836,6 +877,7 @@ def render_dashboard(
             "image_license": bird.image_license,
             "source_url": bird.source_url,
             "source_name": bird.source_name,
+            "birdnet": bird.birdnet,
         },
         "image": image_details,
         "warnings": [image_warning] if image_warning else [],
@@ -1263,6 +1305,11 @@ def main() -> None:
     if not args.no_birdnet:
         bird, birdnet_warnings = enrich_from_birdnet(bird, args.birdnet_size)
         enrichment_warnings.extend(birdnet_warnings)
+    if args.require_birdnet and (
+        bird.birdnet is None or not bird.birdnet.get("taxonomy_version")
+    ):
+        warnings = "; ".join(enrichment_warnings) or "BirdNET returned no taxonomy record"
+        raise SystemExit(f"Fresh BirdNET taxonomy data is required. Reason: {warnings}")
     image, metadata = render_dashboard(bird, date_text, args.width, args.height, args.saturation)
     if args.ee02_palette:
         image = quantize_for_ee02(image)

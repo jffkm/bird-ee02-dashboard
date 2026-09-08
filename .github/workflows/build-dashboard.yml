@@ -37,7 +37,13 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Render Raspberry Pi dashboard
-        run: python build_dashboard.py --width 600 --height 448 --out public --require-image
+        run: >-
+          python build_dashboard.py
+          --width 600
+          --height 448
+          --out public
+          --require-image
+          --require-birdnet
 
       - name: Render EE02 13.3-inch dashboard
         run: >-
@@ -46,6 +52,7 @@ jobs:
           --height 1600
           --out public
           --require-image
+          --require-birdnet
           --image-format jpeg
           --ee02-palette
 

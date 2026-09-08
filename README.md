@@ -10,7 +10,10 @@ it with GitHub Pages, and displays it on either of these e-paper systems:
 The renderer and display clients are deliberately separate:
 
 - GitHub renders `today.png`, `today.jpg`, and `today.json` from `birds.json`
-  once per day. It also selects one reviewed Inky Bird Frame plate and publishes
+  once per day. Each build fetches and records a fresh BirdNET taxonomy response
+  for the selected species; the workflow fails rather than silently publishing
+  stale local metadata if BirdNET is unavailable. It also selects one reviewed
+  Inky Bird Frame plate and publishes
   `birdplate.jpg` plus `birdplate.json`. Both JPEGs are six-color,
   `1200x1600` portrait images for EE02. A stable daily coin flip copies one of
   them to `frame.jpg` for the ESP32.
@@ -59,6 +62,14 @@ open public/index.html
 
 The two `--no-*` flags make that first test deterministic and network-free. Omit
 them to test live BirdNET and Wikipedia enrichment.
+
+The production workflow also passes `--require-birdnet`. The published
+`today.json` and `frame.json` files include the BirdNET API URL, fetch time,
+taxonomy version, BirdNET ID, observation count, and BirdNET image provenance.
+Wikipedia remains the preferred photo source because its original image is
+better suited to the 1200x1600 panel than BirdNET's small proxy image.
+`birds.json` is the local species-selection pool; BirdNET refreshes the selected
+species' taxonomy record rather than supplying a separate bird-of-the-day feed.
 
 ## Enable GitHub Pages
 
