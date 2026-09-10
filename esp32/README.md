@@ -109,9 +109,9 @@ constexpr uint32_t REFRESH_FALLBACK_MINUTES = 24U * 60U;
 constexpr uint32_t ERROR_RETRY_MINUTES = 6U * 60U;
 ```
 
-GitHub generates the new image at 11:17 UTC, which is 4:17 AM PDT or
-3:17 AM PST. That leaves several hours for the Pages file to update before the
-frame requests it at 7:00 AM.
+GitHub schedules the new image for 12:37 AM Pacific using an explicit
+`America/Los_Angeles` time zone. That leaves more than six hours for delayed
+Actions runs and the Pages deployment before the frame requests it at 7:00 AM.
 
 ## 6. Move to battery power
 

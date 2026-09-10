@@ -107,9 +107,9 @@ bird-plate workflow command, for example:
 run: python build_birdplate.py --out public --slug eastern-bluebird
 ```
 
-The scheduled workflow runs at 11:17 UTC each day. GitHub schedules use UTC, so
-adjust the cron expression in `.github/workflows/build-dashboard.yml` if a
-different local publish time is required.
+The scheduled workflow runs at 12:37 AM Pacific each day using GitHub's
+timezone-aware schedule. This leaves more than six hours before the EE02's
+7:00 AM refresh, including automatic PST/PDT adjustment.
 
 ## Install on the ESP32
 

@@ -6,9 +6,10 @@ on:
     branches:
       - main
   schedule:
-    # GitHub scheduled workflows use UTC. This is 4:17 AM Pacific during DST.
-    # Avoid the top of the hour because scheduled runs can be delayed then.
-    - cron: "17 11 * * *"
+    # Build well before the EE02's 7:00 AM wake. The explicit time zone keeps
+    # this at 12:37 AM Pacific through both PST and PDT.
+    - cron: "37 0 * * *"
+      timezone: "America/Los_Angeles"
 
 permissions:
   contents: read
