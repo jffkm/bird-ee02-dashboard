@@ -173,14 +173,19 @@ def choose_daily_frame_source(date_text: str, seed: str) -> str:
 
 
 def publish_daily_frame(out_dir: Path, date_text: str, seed: str) -> str:
-    source_kind = choose_daily_frame_source(date_text, seed)
+    requested_source = choose_daily_frame_source(date_text, seed)
+    dashboard_ready = all(
+        (out_dir / filename).is_file() for filename in ["today.jpg", "today.json"]
+    )
+    fallback_used = not dashboard_ready
+    source_kind = requested_source if dashboard_ready else "birdplate"
     source_stem = "birdplate" if source_kind == "birdplate" else "today"
     source_image = out_dir / f"{source_stem}.jpg"
     source_metadata = out_dir / f"{source_stem}.json"
     if not source_image.is_file() or not source_metadata.is_file():
         raise SystemExit(
-            "Both today.jpg/today.json and birdplate.jpg/birdplate.json must "
-            "exist before publishing the daily frame."
+            f"Could not publish {source_kind}: {source_image.name} and "
+            f"{source_metadata.name} are required."
         )
 
     frame_image = out_dir / "frame.jpg"
@@ -191,9 +196,18 @@ def publish_daily_frame(out_dir: Path, date_text: str, seed: str) -> str:
     metadata = json.loads(source_metadata.read_text(encoding="utf-8"))
     frame_metadata = {
         "date": date_text,
-        "selection": "daily-deterministic-coin-flip",
+        "selection": (
+            "birdnet-dashboard-fallback" if fallback_used
+            else "daily-deterministic-coin-flip"
+        ),
+        "requested_source": requested_source,
         "selected_source": source_kind,
         "selected_filename": source_image.name,
+        "fallback_used": fallback_used,
+        "fallback_reason": (
+            "BirdNET dashboard output was unavailable; published bird plate."
+            if fallback_used else None
+        ),
         "image": {
             "filename": frame_image.name,
             "width": PANEL_SIZE[0],

@@ -9,11 +9,9 @@ it with GitHub Pages, and displays it on either of these e-paper systems:
 
 The renderer and display clients are deliberately separate:
 
-- GitHub renders `today.png`, `today.jpg`, and `today.json` from `birds.json`
-  once per day. Each build fetches and records a fresh BirdNET taxonomy response
-  for the selected species; the workflow fails rather than silently publishing
-  stale local metadata if BirdNET is unavailable. It also selects one reviewed
-  Inky Bird Frame plate and publishes
+- GitHub chooses a licensed bird photo from BirdNET's live catalog and renders
+  `today.png`, `today.jpg`, and `today.json` once per day. It also selects one
+  reviewed Inky Bird Frame plate and publishes
   `birdplate.jpg` plus `birdplate.json`. Both JPEGs are six-color,
   `1200x1600` portrait images for EE02. A stable daily coin flip copies one of
   them to `frame.jpg` for the ESP32.
@@ -26,9 +24,10 @@ The renderer and display clients are deliberately separate:
 ```text
 .
 ├── .github/workflows/build-dashboard.yml  # Daily build and Pages deployment
+├── select_birdnet_bird.py                 # Live catalog/daily bird selector
 ├── build_dashboard.py                     # Backend image renderer
 ├── build_birdplate.py                     # Daily plate selector/EE02 renderer
-├── birds.json                             # Bird list
+├── birds.json                             # Offline/manual bird list
 ├── requirements.txt                       # Backend dependencies
 ├── esp32/
 │   ├── README.md                         # Arduino setup and flashing
@@ -63,13 +62,23 @@ open public/index.html
 The two `--no-*` flags make that first test deterministic and network-free. Omit
 them to test live BirdNET and Wikipedia enrichment.
 
-The production workflow also passes `--require-birdnet`. The published
+The production workflow selects from BirdNET's live catalog of birds with a
+description, a usable image, and at least 10,000 iNaturalist observations.
+Images carrying a NoDerivatives or unknown license are excluded. A
+date-seeded monthly ordering avoids repeats within a month while keeping manual
+reruns stable for the day. The same selected record is used for both dashboard
+sizes.
+
+The workflow also passes `--require-birdnet`. The published
 `today.json` and `frame.json` files include the BirdNET API URL, fetch time,
 taxonomy version, BirdNET ID, observation count, and BirdNET image provenance.
-Wikipedia remains the preferred photo source because its original image is
-better suited to the 1200x1600 panel than BirdNET's small proxy image.
-`birds.json` is the local species-selection pool; BirdNET refreshes the selected
-species' taxonomy record rather than supplying a separate bird-of-the-day feed.
+The selected BirdNET record's licensed catalog image is preferred, with
+Wikipedia enrichment retained for additional description text. `birds.json`
+remains available for offline tests and manual curated builds.
+
+If BirdNET selection or dashboard rendering fails, the workflow still renders
+the Inky Bird Frame plate and publishes it as `frame.jpg`. `frame.json` records
+whether this automatic fallback was used.
 
 ## Enable GitHub Pages
 

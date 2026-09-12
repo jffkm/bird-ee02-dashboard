@@ -66,6 +66,7 @@ class Bird:
     description: str | None = None
     source_name: str | None = None
     birdnet: dict[str, Any] | None = None
+    birdnet_selection: dict[str, Any] | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Bird":
@@ -87,6 +88,11 @@ class Bird:
             range=clean_optional(data.get("range")),
             description=clean_optional(data.get("description")),
             source_name=clean_optional(data.get("source_name")),
+            birdnet_selection=(
+                data.get("birdnet_selection")
+                if isinstance(data.get("birdnet_selection"), dict)
+                else None
+            ),
         )
 
 
@@ -878,6 +884,7 @@ def render_dashboard(
             "source_url": bird.source_url,
             "source_name": bird.source_name,
             "birdnet": bird.birdnet,
+            "birdnet_selection": bird.birdnet_selection,
         },
         "image": image_details,
         "warnings": [image_warning] if image_warning else [],
